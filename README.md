@@ -4,7 +4,7 @@ Interactive session handoff command for [Claude Code](https://docs.anthropic.com
 
 ## What It Does
 
-When you're done working or need to switch context, run `/handoff` to save a structured summary of your session. Next time you start Claude Code, the context is loaded automatically so you can pick up where you left off.
+When you're done working or need to switch context, run `/handoff` to save a structured summary of your session. Next time you start Claude Code, the hooks load that context automatically so you can pick up where you left off.
 
 ### Handoff Modes
 
@@ -16,63 +16,77 @@ When you're done working or need to switch context, run `/handoff` to save a str
 | **Recovery** | Autocompact degraded your context | Reconstructs handoff from full transcript |
 | **Clean** | Starting fresh | Deletes all session files |
 
+### How It Works
+
+1. You run `/handoff` before ending a session
+2. Claude writes structured context files to `.claude/`
+3. Next session, the **SessionStart hook** outputs those files into Claude's context
+4. During long sessions, the **PreCompact hook** re-injects context before autocompaction so nothing is lost
+
 ## Install
 
-### As a git submodule (recommended)
+### Quick Setup (have Claude do it)
+
+Add the submodule to your project, then tell Claude:
+
+> Install claude-code-handoff following the instructions in claude-code-handoff/README.md
+
+Claude will create the symlinks and settings for you.
+
+### Step-by-Step
+
+**1. Add the submodule**
 
 ```bash
-# Add to your project
 git submodule add https://github.com/Sonovore/claude-code-handoff.git claude-code-handoff
+```
 
-# Symlink the command so Claude Code sees it
-mkdir -p .claude/commands
+**2. Create directories**
+
+```bash
+mkdir -p .claude/commands .claude/hooks
+```
+
+**3. Symlink the command**
+
+```bash
 cd .claude/commands
 ln -sf ../../claude-code-handoff/handoff.md .
 cd ../..
 ```
 
-### Manual install
+**4. Symlink the hooks**
 
-Copy `handoff.md` to `.claude/commands/handoff.md` in your project.
-
-Copy `extract-transcript.py` somewhere accessible (only needed for Recovery mode).
-
-## Usage
-
-In Claude Code, type:
-
-```
-/handoff
+```bash
+cd .claude/hooks
+ln -sf ../../claude-code-handoff/hooks/session-start.sh .
+ln -sf ../../claude-code-handoff/hooks/pre-compact.sh .
+cd ../..
 ```
 
-You'll be prompted to choose a mode. The command writes structured markdown files to `.claude/` that Claude Code reads at the start of your next session.
+**5. Make hooks executable**
 
-### Task Mode Example
-
-After running `/handoff` → Task, you get:
-
-- `.claude/context.md` — Quick summary with current step, key files, build commands
-- `.claude/current-task.md` — Full task details: goal, progress, architecture decisions, remaining work, test procedure
-- `.claude/task-history.md` — Append-only log of what was accomplished each session
-
-### Recovery Mode
-
-If autocompaction has degraded your context mid-session (Claude starts forgetting things), Recovery mode reads the full `.jsonl` transcript and regenerates handoff files with specific details: exact test numbers, parameter values, debugging timelines.
-
-Requires `extract-transcript.py` to be accessible at the path in `handoff.md`. The script filters out noise (file reads, build output, task acks) and extracts meaningful content (user requests, test results, diagnostics).
-
-## Files
-
-| File | Description |
-|------|-------------|
-| `handoff.md` | The `/handoff` slash command (Claude Code reads this as instructions) |
-| `extract-transcript.py` | Transcript parser for Recovery mode |
-
-## Gitignore
-
-Add to your `.gitignore`:
-
+```bash
+chmod +x claude-code-handoff/hooks/*.sh
 ```
+
+**6. Configure settings**
+
+If `.claude/settings.json` doesn't exist yet, copy the snippet:
+
+```bash
+cp claude-code-handoff/settings-snippet.json .claude/settings.json
+```
+
+If `.claude/settings.json` already exists, merge the hooks from `settings-snippet.json` into your existing config. The relevant hooks are:
+
+- **SessionStart** — runs `session-start.sh` to load handoff context
+- **PreCompact** — runs `pre-compact.sh` to re-inject context before autocompaction
+
+**7. Add to .gitignore**
+
+```bash
+# Handoff context files (session-specific, not for version control)
 .claude/context.md
 .claude/current-task.md
 .claude/task-history.md
@@ -80,9 +94,70 @@ Add to your `.gitignore`:
 .claude/mode
 ```
 
+**8. Restart Claude Code**
+
+The `/handoff` command and hooks will be active on next session start.
+
+### Manual Install (no submodule)
+
+1. Copy `handoff.md` → `.claude/commands/handoff.md`
+2. Copy `hooks/session-start.sh` → `.claude/hooks/session-start.sh`
+3. Copy `hooks/pre-compact.sh` → `.claude/hooks/pre-compact.sh`
+4. Copy `extract-transcript.py` somewhere accessible (update the path in `handoff.md` line 250)
+5. Follow steps 5-8 above
+
+## Files
+
+```
+claude-code-handoff/
+├── README.md                 # This file
+├── LICENSE                   # MIT
+├── handoff.md                # /handoff slash command
+├── extract-transcript.py     # Transcript parser (Recovery mode)
+├── settings-snippet.json     # Hook config to merge into .claude/settings.json
+└── hooks/
+    ├── session-start.sh      # SessionStart: loads context at session start
+    └── pre-compact.sh        # PreCompact: re-injects context before autocompaction
+```
+
+## Usage
+
+### Starting a session
+
+If hooks are installed, context loads automatically. You'll see:
+
+```
+=== Session Context ===
+
+--- context.md ---
+# Session Context
+...
+
+=== Ready ===
+```
+
+### Ending a session
+
+```
+/handoff
+```
+
+Choose a mode when prompted. Files are written to `.claude/` and will be loaded next session.
+
+### Recovery after autocompaction
+
+If Claude starts losing context mid-session (forgetting what it was working on, re-reading files it already read), run:
+
+```
+/handoff
+```
+
+Select **Recovery**. This reads the full `.jsonl` transcript, extracts the useful content (user requests, test results, decisions), and regenerates the handoff files with full detail. Then `/clear` to free context — the recovered handoff will load on the next prompt.
+
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
+- `bash` (for hooks)
 - Python 3 (for Recovery mode only)
 
 ## License
