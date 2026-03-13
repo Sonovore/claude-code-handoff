@@ -14,6 +14,10 @@ cd "$(git rev-parse --show-toplevel)"
 echo "=== Session Context ==="
 echo ""
 
+# Live session state (maintained automatically by live-handoff)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"$SCRIPT_DIR/proactive-handoff.sh" load 2>/dev/null || true
+
 # Primary context file (written by all handoff modes)
 if [ -f ".claude/context.md" ]; then
     echo "--- context.md ---"
