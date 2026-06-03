@@ -39,10 +39,24 @@ if [ -f ".claude/current-bug.md" ]; then
     echo ""
 fi
 
+# Bug test ledger (append-only — written by Bug mode)
+if [ -f ".claude/bug-test-log.md" ]; then
+    echo "--- bug-test-log.md ---"
+    cat ".claude/bug-test-log.md"
+    echo ""
+fi
+
 # Task history (written by Task mode, append-only)
 if [ -f ".claude/task-history.md" ]; then
     echo "--- task-history.md (last 10 entries) ---"
     tail -20 ".claude/task-history.md"
+    echo ""
+fi
+
+# Recent user prompts (written by Task/Bug modes)
+if [ -f ".claude/recent-prompts.md" ]; then
+    echo "--- recent-prompts.md ---"
+    cat ".claude/recent-prompts.md"
     echo ""
 fi
 
