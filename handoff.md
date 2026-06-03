@@ -7,6 +7,16 @@ user_invocable: true
 
 Interactive handoff command. Saves context before ending session or running `/clear`.
 
+## Guiding principle: write for the NEXT context window
+
+Optimize every handoff for what the next session needs to *act*, not for a record of what happened. The next window can recover completed work from git, the code, and commit messages — so spend the budget on what it *cannot* recover:
+
+- **The forward-looking conversation.** When one or more parts of the work just finished, the highest-value content is the discussion about what comes next — decisions made, options weighed, the direction agreed on, and the user's stated intent in their own phrasing. Capture that conversation, not a summary of finished code.
+- **Just enough history as a safety net.** A few lines on what was done and why, in case a decision needs revisiting. Keep it terse.
+- **Empirical results that are expensive to reproduce** — especially for bugs: exact commands and their actual outputs.
+
+When trimming to fit a size budget, cut historical narrative first; preserve next-step reasoning and un-reproducible results last.
+
 ## Instructions
 
 ### Step 1: Ask handoff type
@@ -19,9 +29,7 @@ Use AskUserQuestion with these options:
 1. **Context** (default) - "General context, clears task/bug state. Use when work is complete or switching focus."
 2. **Task** - "Multi-session task. Preserves detailed task tracking files."
 3. **Bug** - "Bug investigation. Creates bug-specific context (can layer on top of task)."
-4. **Recovery** - "Re-generate handoff from full transcript. Use after autocompact degraded context."
-
-Note: **Clean** is also available if the user types it via "Other". See the Clean section below.
+4. **Clean** - "Reset to clean state. Keeps only project-specific files (CLAUDE.md, settings), clears all session context."
 
 ### Step 2: Execute based on selection
 
@@ -73,7 +81,7 @@ Note: **Clean** is also available if the user types it via "Other". See the Clea
 ```markdown
 # Session Context
 
-## Mode: Task
+## Mode: Task (a moving process — capture where it's heading, not just where it's been)
 
 **Task:** [One-line description]
 **Progress:** [X]% — [Current phase]
@@ -81,8 +89,17 @@ Note: **Clean** is also available if the user types it via "Other". See the Clea
 
 See `.claude/current-task.md` for full details.
 
+## Next Up — Decided Direction & Open Threads
+The forward-looking conversation. This is the most valuable part of the handoff — especially if a part just finished. Capture in priority order:
+1. **What we decided to do next and why** — the conclusion of the most recent discussion, in the user's framing/phrasing.
+2. **Options still open / not yet decided** — anything under debate, with the trade-offs already surfaced so they aren't re-litigated next session.
+3. **Immediate next action** — the single concrete thing to start with.
+
 ## Current Step
 [What's being worked on RIGHT NOW - 2-3 lines]
+
+## Done This Session (fallback context — keep brief)
+[2-4 bullets of what changed and why; recoverable from git if needed]
 
 ## Key Files This Session
 | File | Change |
@@ -93,6 +110,9 @@ See `.claude/current-task.md` for full details.
 \`\`\`bash
 [Build command]
 \`\`\`
+
+## Recent Prompts
+See `.claude/recent-prompts.md` for the user's last prompts before handoff.
 
 ## If Resuming Cold
 [What someone needs to know to pick this up with NO other context - 5 lines max]
@@ -107,22 +127,27 @@ See `.claude/current-task.md` for full details.
 **Acceptance:** [How we know it's done]
 
 ## Progress
-[X]% complete. Phases: [list with checkmarks]
+[X]% complete. Phases: [list with checkmarks]. This is a moving target — rewrite it as it evolves, don't just append.
+
+## Next Session Starts Here
+- **Direction:** [What we decided to do next and why — the live plan, from the latest discussion, in the user's framing]
+- **First action:** [The single concrete next step]
+- **Open questions:** [Anything still undecided, plus the trade-offs already discussed so they aren't re-opened]
+
+## Remaining (live plan — reorder/rewrite as it changes)
+1. [Item]
 
 ## Architecture Decisions
 | Decision | Choice | Why |
 |----------|--------|-----|
 
-## Completed This Session
-| Item | Key Files |
-|------|-----------|
-
-## Remaining
-1. [Item]
-
 ## Key Code Locations
 | File | Line | Description |
 |------|------|-------------|
+
+## Done This Session (brief fallback — recoverable from git)
+| Item | Key Files |
+|------|-----------|
 
 ## Test Procedure
 1. [Step]
@@ -142,7 +167,7 @@ Session N (YYYY-MM-DD): [What was accomplished]. Key: [most important file:line 
 1. Read current mode from `.claude/mode`
 2. If current mode is `task`: set mode to `task.bug` (PRESERVE task files)
 3. Otherwise: set mode to `bug` (delete task files)
-4. Create/update `.claude/current-bug.md`
+4. Create/update `.claude/current-bug.md` (current state) and append to `.claude/bug-test-log.md` (empirical history — never overwrite it)
 
 **Write `.claude/context.md`:**
 
@@ -163,6 +188,9 @@ See `.claude/current-bug.md` for investigation details.
 
 ## Current Hypothesis
 [What you think is wrong - 2 lines]
+
+## Recent Prompts
+See `.claude/recent-prompts.md` for the user's last prompts before handoff.
 
 ## Build
 \`\`\`bash
@@ -189,13 +217,16 @@ See `.claude/current-task.md` for task details.
 ## Reproduce
 1. [Step]
 
+## Recent Prompts
+See `.claude/recent-prompts.md` for the user's last prompts before handoff.
+
 ## Build
 \`\`\`bash
 [Build command]
 \`\`\`
 ```
 
-**Write `.claude/current-bug.md` (max 40 lines):**
+**Write `.claude/current-bug.md` (current state — keep lean, the long history lives in the test log):**
 
 ```markdown
 # Bug: [Title]
@@ -204,101 +235,61 @@ See `.claude/current-task.md` for task details.
 [What user sees - 2 lines max]
 
 ## Reproduce
-1. [Step]
+\`\`\`bash
+[exact command(s) to reproduce — copy-pasteable]
+\`\`\`
 
-## Root Cause
-[If known - 3 lines max. If unknown, write "Investigating"]
+## Status
+[Investigating / Root cause found / Fix in progress]
 
-## Investigation
-| What I tried | Result |
-|--------------|--------|
-
-## Hypothesis
+## Current Hypothesis
 [Current theory - 2 lines]
+
+## Confirmed Facts (established — do not re-investigate)
+- [Fact] — established by [Tn] in bug-test-log.md
+
+## Ruled Out (dead ends — do not retry)
+- [Approach / hypothesis] — ruled out by [Tn], because [result]
 
 ## Key Locations
 | File:Line | What |
 |-----------|------|
 
 ## Next Step
-[Single action to take next]
+[Single concrete action to take next]
+
+## Test Log
+Full command-by-command history in `.claude/bug-test-log.md`. Read it before running anything — it records what has already been tried and what it showed.
 ```
 
----
+**Write/append `.claude/bug-test-log.md` (append-only — the empirical ledger):**
 
-## Option: Recovery
+Purpose: so the next session never re-runs a settled test, and so there is a durable record of what went right and what went wrong. Record every meaningful test, command, build, or measurement run during the investigation.
 
-**Purpose:** Re-generate handoff files from the full conversation transcript after autocompact has degraded context. This recovers details that were lost during compaction (exact test results, per-file breakdowns, debugging sequences, specific parameter values, etc.).
+```markdown
+# Bug Test Log — [Title]
 
-**Important:** This option uses significant context. The user should `/clear` after recovery completes.
+Append-only. Each entry is one test/experiment. Never delete or rewrite past entries — correct a wrong conclusion with a *later* entry that references the earlier one.
 
-### Step R1: Locate and extract transcript
+## Test History
 
-Find the current session's full transcript and extract the useful content:
+### T1 — [what this test was checking] — [PASS / FAIL / INCONCLUSIVE]
+- **Command:** \`exact command line, with flags and args\`
+- **Result:** [actual output — the key lines, error text, exit code, or measured value]
+- **Conclusion:** [what it established or eliminated]
 
-```bash
-# Find the most recent .jsonl transcript for this project
-PROJECT_DIR="$HOME/.claude/projects/$(pwd | sed 's|/|-|g; s|^-||')"
-TRANSCRIPT=$(ls -t "$PROJECT_DIR"/*.jsonl 2>/dev/null | head -1)
+### T2 — [...]
+- **Command:** \`...\`
+- **Result:** [...]
+- **Conclusion:** [...]
 ```
 
-If no transcript is found, inform the user and abort.
-
-Run the extraction script to pull out only meaningful content (user messages, assistant summaries, test results, diagnostics). This filters out file reads, build noise, task acks, and other tool noise:
-
-```bash
-python3 "$(git rev-parse --show-toplevel)/claude-code-handoff/extract-transcript.py" "$TRANSCRIPT"
-```
-
-The script outputs a chronological flow of USER requests, CLAUDE responses, and OUTPUT results. It automatically stops at the compaction boundary.
-
-If the extraction script is not available, fall back to reading the `.jsonl` directly with the Read tool in chunks.
-
-### Step R2: Read the extracted output
-
-Read the extraction output directly into your context window using the Read tool. **Do NOT use a subagent** — the user will `/clear` or `/exit` after recovery, so using context space is fine and is the whole point.
-
-As you read, note:
-- Every user request and correction
-- Test/build results with exact numbers
-- Parameter tuning sequences (before → after)
-- Diagnostic output (timing, per-component breakdowns)
-- What worked vs. what didn't
-
-### Step R3: Ask target handoff type
-
-Use AskUserQuestion:
-
-**Question:** "What type of handoff should I generate from the recovered context?"
-**Header:** "Recovery"
-**Options:**
-1. **Task** (default) - "Multi-session task with full tracking files."
-2. **Context** - "General context summary."
-3. **Bug** - "Bug investigation context."
-
-### Step R4: Generate handoff files
-
-Using the recovered context (now in your main context window), generate the handoff files following the template for the selected type (Task, Context, or Bug) from the sections above.
-
-**Key difference from normal handoff:** Since you have full recovered context, you can and SHOULD include more specific details than usual:
-- Exact test result numbers per file, not just aggregates
-- Specific parameter tuning history with rationale for each change
-- Exact error messages and their fixes
-- Detailed debugging timeline
-
-The line limits on handoff files (50 for context.md, 100 for current-task.md) can be exceeded by up to 50% for recovery handoffs, since the extra detail is the whole point.
-
-### Step R5: Report
-
-Tell the user:
-```
-Recovery handoff complete:
-- Source: [transcript path] ([N] lines)
-- Generated: [list of files written]
-- Type: [Context|Task|Bug]
-
-You can now /clear to free context.
-```
+**Test-log rules:**
+- Record the **exact** command line — copy-pasteable, not paraphrased.
+- Record the **actual** result (verbatim key lines / exit code / measured value), never just "it worked" or "failed".
+- Tag every entry PASS / FAIL / INCONCLUSIVE so dead ends are obvious at a glance.
+- When a test settles a question, also promote it to **Confirmed Facts** or **Ruled Out** in `current-bug.md`.
+- Append across sessions — this log is the cumulative history of the whole investigation, not just this session.
 
 ---
 
@@ -311,7 +302,9 @@ You can now /clear to free context.
 - `.claude/current-task.md`
 - `.claude/task-history.md`
 - `.claude/current-bug.md`
+- `.claude/bug-test-log.md`
 - `.claude/session-state.md`
+- `.claude/recent-prompts.md`
 
 **Set `.claude/mode` to `normal`**
 
@@ -329,12 +322,52 @@ You can now /clear to free context.
 **Report to user:**
 ```
 Cleaned session context:
-- Deleted: context.md, current-task.md, task-history.md, current-bug.md, session-state.md
+- Deleted: context.md, current-task.md, task-history.md, current-bug.md, bug-test-log.md, session-state.md
 - Cleaned: tasks.md (removed N completed tasks)
 - Mode: normal
 
 Ready for fresh start.
 ```
+
+---
+
+## User Prompt Capture (Task and Bug modes only)
+
+When performing a **Task** or **Bug** handoff, save the last 5 user prompts to `.claude/recent-prompts.md`.
+
+**Size gate:** Estimate the total size of the 5 prompts. If they exceed ~5% of the context window (~10K tokens / ~40KB of text), keep only the most recent prompts that fit within that budget. If even a single prompt exceeds the budget, truncate it to fit and note `[truncated]`.
+
+**Write `.claude/recent-prompts.md`:**
+
+```markdown
+# Recent User Prompts
+
+Captured at handoff for session continuity. Provides the next session with the user's recent intent and phrasing.
+
+## Prompt 1 (most recent)
+> [verbatim user prompt text]
+
+## Prompt 2
+> [verbatim user prompt text]
+
+...
+```
+
+**Rules:**
+- Include only user messages (not assistant responses, tool results, or system messages)
+- Preserve the user's exact wording — do not paraphrase or summarize
+- Use blockquote formatting for each prompt
+- Number from most recent (1) to oldest (5)
+- If fewer than 5 user prompts exist in the session, include all of them
+
+**References from context.md:** Add this line to the Task and Bug context.md templates under the "Build" section:
+
+```markdown
+## Recent Prompts
+See `.claude/recent-prompts.md` for the user's last prompts before handoff.
+```
+
+**Clean mode:** Delete `.claude/recent-prompts.md` along with other session files.
 
 ---
 
@@ -346,3 +379,4 @@ Before writing files, apply these cleanup rules:
 2. **Dedupe tasks** - If tasks.md has duplicate entries, merge them
 3. **Compress history** - If task-history.md exceeds 30 entries, compress old ones
 4. **Remove stale references** - Don't reference files that no longer exist
+5. **Preserve the bug test log** - `.claude/bug-test-log.md` is append-only and exempt from trimming; never drop a test entry to save space. Only if it grows very large, collapse entries already promoted to "Confirmed Facts" / "Ruled Out" into a one-line reference — but keep their exact command and result.

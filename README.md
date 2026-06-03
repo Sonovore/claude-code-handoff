@@ -25,13 +25,16 @@ Claude continuously maintains a `.claude/session-state.md` file as you work. No 
 
 Run `/handoff` before ending a session to write structured context files. Good for deliberate handoffs where you want to control exactly what's saved.
 
+`/handoff` is written for what the **next context window** needs in order to act — it prioritizes the forward-looking conversation (decisions and direction about what to do next) over a record of finished work, which is recoverable from git.
+
 | Mode | Use When | Output |
 |------|----------|--------|
 | **Context** | General work, switching focus | `.claude/context.md` (50 lines) |
-| **Task** | Multi-session project work | `.claude/context.md` + `.claude/current-task.md` + `.claude/task-history.md` |
-| **Bug** | Debugging investigation | `.claude/current-bug.md` (can layer on top of task) |
-| **Recovery** | Autocompact degraded your context | Reconstructs handoff from full transcript |
+| **Task** | Multi-session project work (a moving process) | `.claude/context.md` + `.claude/current-task.md` + `.claude/task-history.md` + `.claude/recent-prompts.md` |
+| **Bug** | Debugging investigation | `.claude/current-bug.md` (status, confirmed facts, ruled-out dead ends) + `.claude/bug-test-log.md` (append-only ledger of every test's exact command + result) + `.claude/recent-prompts.md` |
 | **Clean** | Starting fresh | Deletes all session files |
+
+Task mode treats the work as a moving process — `current-task.md` leads with the decided direction and next action. Bug mode keeps an append-only **test ledger** so settled tests and dead ends are never re-run.
 
 Both systems work together — the automated system maintains live state, while `/handoff` creates deliberate checkpoints.
 
@@ -109,6 +112,8 @@ If `.claude/settings.json` already exists, merge the hooks from `settings-snippe
 .claude/current-task.md
 .claude/task-history.md
 .claude/current-bug.md
+.claude/bug-test-log.md
+.claude/recent-prompts.md
 .claude/session-state.md
 .claude/session-state.md.bak
 .claude/mode
@@ -122,8 +127,7 @@ The hooks will be active on next session start. The automated system begins trac
 
 1. Copy all files from `hooks/` → `.claude/hooks/`
 2. Copy `handoff.md` → `.claude/commands/handoff.md`
-3. Copy `extract-transcript.py` somewhere accessible (update the path in `handoff.md` line 250)
-4. Follow steps 5-8 above
+3. Follow steps 5-8 above
 
 ### Minimal Install (automated only, no `/handoff` command)
 
@@ -141,7 +145,6 @@ claude-code-handoff/
 ├── README.md                          # This file
 ├── LICENSE                            # MIT
 ├── handoff.md                         # /handoff slash command
-├── extract-transcript.py              # Transcript parser (Recovery mode)
 ├── settings-snippet.json              # Hook config to merge into .claude/settings.json
 └── hooks/
     ├── session-start.sh               # SessionStart: loads context + session state
@@ -182,22 +185,17 @@ With the automated system, Claude maintains `.claude/session-state.md` continuou
 
 **Manual:** Run `/handoff` and choose a mode for a more structured handoff.
 
-### Recovery after autocompaction
+### Surviving autocompaction
 
-If Claude starts losing context mid-session (forgetting what it was working on, re-reading files it already read), run:
+The automated system handles this for you. `live-handoff.sh` (UserPromptSubmit) keeps `.claude/session-state.md` current, and `pre-compact-handoff.sh` (PreCompact) forces a complete state dump before autocompaction — so context survives a compaction without manual intervention. The state reloads on the next prompt and at session start.
 
-```
-/handoff
-```
-
-Select **Recovery**. This reads the full `.jsonl` transcript, extracts the useful content (user requests, test results, decisions), and regenerates the handoff files with full detail. Then `/clear` to free context — the recovered handoff will load on the next prompt.
+For a deliberate checkpoint at any point, run `/handoff` and pick a mode.
 
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
 - `bash` (for hooks)
 - `jq` (for file tracking via post-edit-hook)
-- Python 3 (for Recovery mode only)
 
 ## License
 
