@@ -19,6 +19,50 @@ When trimming to fit a size budget, cut historical narrative first; preserve nex
 
 ## Instructions
 
+### Step 0: Discover all relevant `.claude/` directories
+
+**This step is non-negotiable.** Claude Code auto-loads `CLAUDE.md` from parent directories at session start, but during a handoff Claude is generating new content from memory and can miss parent-level state. Before writing anything, explicitly enumerate and read every `.claude/` in the tree.
+
+1. **Resolve the write target** — the handoff writes to one canonical location:
+   ```bash
+   PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+   ```
+   All `.claude/<file>` writes below resolve to `$PROJECT_ROOT/.claude/<file>`. Use absolute paths in tool calls; do not rely on cwd.
+
+2. **Discover all `.claude/` directories from `$PROJECT_ROOT` up to `$HOME`** (inclusive):
+   ```bash
+   d="$PROJECT_ROOT"
+   while true; do
+     [ -d "$d/.claude" ] && echo "$d/.claude"
+     if [ "$d" = "$HOME" ] || [ "$d" = "/" ]; then break; fi
+     d="$(dirname "$d")"
+   done
+   ```
+   Run this and capture the list. Most projects have one or two; cross-project setups (e.g., a parent dir hosting multiple repos with shared instructions) have more. Stop after checking `$HOME` — do not walk above the user's home directory.
+
+3. **Read every relevant file at every level discovered.** For each `.claude/` directory found:
+   - `CLAUDE.md` — instructions (parent levels often hold global preferences; project level holds project-specific rules)
+   - `mode` — current mode (normal / task / bug / task.bug)
+   - `context.md` — session context
+   - `current-task.md` — active task details
+   - `current-bug.md` — active bug details
+   - `task-history.md` — historical task entries
+   - `recent-prompts.md` — recent user prompts
+   - `session-state.md` — live session state from proactive-handoff.sh
+   - `tasks.md` — pending task list
+
+   Read whatever exists; don't error on missing files. Read in **parallel** when possible (multiple `Read` tool calls in one message).
+
+4. **Build the full picture before writing.** The new handoff content must reflect:
+   - The user's intent across this session (from recent-prompts.md and conversation)
+   - Active task / bug state (from current-task.md, current-bug.md at every level)
+   - Session-state events (file edits, agent dispatches) from session-state.md
+   - Any parent-level state that the next session must also check
+
+   If parent-level `.claude/` directories contain task/bug/context state, **note them in the new context.md** with explicit paths so the next session knows to read them. Do not silently overwrite parent-level files unless the user explicitly asked.
+
+5. **Write target = project-level `.claude/` only**, unless the user explicitly says otherwise. Cross-project state stays in parent `.claude/`. The handoff coordinates them by reference, not by overwriting.
+
 ### Step 1: Ask handoff type
 
 Use AskUserQuestion with these options:
